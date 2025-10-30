@@ -1,0 +1,9 @@
+# ============================================================================
+# F1 DATA WAREHOUSE - Dependencias Python
+# ============================================================================
+
+# Manipulación de datos
+pandas>=2.0.0
+
+# Conector MySQL
+mysql-connector-python>=8.0.0
