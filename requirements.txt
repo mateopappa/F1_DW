@@ -7,3 +7,10 @@ pandas>=2.0.0
 
 # Conector MySQL
 mysql-connector-python>=8.0.0
+sqlalchemy>=2.0.0
+
+# Dashboard y Visualización
+streamlit>=1.28.0
+plotly>=5.17.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
