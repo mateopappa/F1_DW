@@ -40,15 +40,31 @@ def read_csv_safe(filename):
 def execute_sql_file(conn, filepath):
     """Ejecutar archivo SQL (MySQL requiere ejecutar múltiples statements)"""
     cursor = conn.cursor()
-    with open(filepath, 'r') as f:
-        # Leer contenido completo
-        sql_script = f.read()
-        
-        # Ejecutar cada statement individualmente
-        for statement in sql_script.split(';'):
-            statement = statement.strip()
-            if statement:  # Ignorar statements vacíos
-                cursor.execute(statement)
+    # Leer el archivo intentando diferentes codificaciones para evitar
+    # errores de decodificación en Windows (cp1252) cuando el archivo
+    # contiene caracteres unicode o fue guardado en UTF-8.
+    encodings_to_try = ['utf-8-sig', 'utf-8', 'latin-1']
+    sql_script = None
+    for enc in encodings_to_try:
+        try:
+            with open(filepath, 'r', encoding=enc) as f:
+                sql_script = f.read()
+            break
+        except UnicodeDecodeError:
+            # Intentar la siguiente codificación
+            continue
+
+    if sql_script is None:
+        # Como último recurso, leer en modo binario y decodificar reemplazando
+        # caracteres no decodificables para evitar fallos duros.
+        with open(filepath, 'rb') as f:
+            sql_script = f.read().decode('utf-8', errors='replace')
+
+    # Ejecutar cada statement individualmente (separados por ';')
+    for statement in sql_script.split(';'):
+        statement = statement.strip()
+        if statement:  # Ignorar statements vacíos
+            cursor.execute(statement)
     
     cursor.close()
 
