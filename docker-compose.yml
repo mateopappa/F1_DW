@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Base de datos MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: f1_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-f1_password}
+      MYSQL_DATABASE: f1_datawarehouse
+      MYSQL_USER: ${MYSQL_USER:-f1user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-f1_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - f1_network
+
+  # Dashboard Streamlit
+  dashboard:
+    build: .
+    container_name: f1_dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      # Configuración de base de datos (apunta al servicio mysql)
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: f1_datawarehouse
+      MYSQL_USER: ${MYSQL_USER:-f1user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-f1_password}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - f1_network
+    volumes:
+      - ./data:/app/data:ro  # Solo lectura para los CSV
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  f1_network:
+    driver: bridge

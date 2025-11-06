@@ -10,6 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 from datetime import datetime
+import os
 
 # ============================================================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -26,25 +27,40 @@ st.set_page_config(
 # CONFIGURACIÓN DE BASE DE DATOS
 # ============================================================================
 
-# Intentar obtener credenciales desde Streamlit secrets (cloud) o usar config local
-try:
-    # Si está en Streamlit Cloud
+# Prioridad de configuración:
+# 1. Variables de entorno (Docker/Railway)
+# 2. Streamlit secrets (Streamlit Cloud)
+# 3. Config local (desarrollo)
+
+if os.getenv('MYSQL_HOST'):
+    # Configuración desde variables de entorno (Docker/Railway/Producción)
     DB_CONFIG = {
-        'host': st.secrets["mysql"]["host"],
-        'port': st.secrets["mysql"]["port"],
-        'database': st.secrets["mysql"]["database"],
-        'user': st.secrets["mysql"]["user"],
-        'password': st.secrets["mysql"]["password"]
+        'host': os.getenv('MYSQL_HOST'),
+        'port': int(os.getenv('MYSQL_PORT', 3306)),
+        'database': os.getenv('MYSQL_DATABASE'),
+        'user': os.getenv('MYSQL_USER'),
+        'password': os.getenv('MYSQL_PASSWORD')
     }
-except (FileNotFoundError, KeyError):
-    # Si está en local
-    DB_CONFIG = {
-        'host': 'localhost',
-        'port': 3306,
-        'database': 'f1_datawarehouse',
-        'user': 'root',
-        'password': ''  # ⚠️ CAMBIA ESTO si tu MySQL tiene password
-    }
+else:
+    try:
+        # Si está en Streamlit Cloud (secrets.toml)
+        DB_CONFIG = {
+            'host': st.secrets["mysql"]["host"],
+            'port': st.secrets["mysql"]["port"],
+            'database': st.secrets["mysql"]["database"],
+            'user': st.secrets["mysql"]["user"],
+            'password': st.secrets["mysql"]["password"]
+        }
+    except (FileNotFoundError, KeyError):
+        # Si está en local (desarrollo)
+        DB_CONFIG = {
+            'host': 'localhost',
+            'port': 3306,
+            'database': 'f1_datawarehouse',
+            'user': 'root',
+            'password': ''  # ⚠️ CAMBIA ESTO si tu MySQL tiene password
+        }
+
 
 
 # Crear connection string para SQLAlchemy

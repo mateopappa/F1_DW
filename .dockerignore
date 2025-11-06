@@ -1,0 +1,43 @@
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Credenciales y secrets
+.env
+.streamlit/secrets.toml
+
+# Archivos temporales
+*.log
+*.csv~
+.DS_Store
+
+# Base de datos local
+*.db
+*.db.mv.db
+*.db.trace.db
+metabase.db.mv.db
+metabase.db.trace.db
+
+# Archivos de Metabase
+plugins/
+
+# Otros
+INSTRUCCIONES_PASSWORD.txt
+*.png
