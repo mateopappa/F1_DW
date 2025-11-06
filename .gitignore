@@ -17,8 +17,14 @@ ENV/
 
 # Credenciales
 .env
+.streamlit/secrets.toml
 
 # Archivos temporales
 *.log
 *.csv~
 .DS_Store
+
+# Base de datos local
+*.db
+*.db.mv.db
+*.db.trace.db

@@ -26,13 +26,26 @@ st.set_page_config(
 # CONFIGURACIÓN DE BASE DE DATOS
 # ============================================================================
 
-DB_CONFIG = {
-    'host': 'localhost',
-    'port': 3306,
-    'database': 'f1_datawarehouse',
-    'user': 'root',
-    'password': ''  # ⚠️ CAMBIA ESTO
-}
+# Intentar obtener credenciales desde Streamlit secrets (cloud) o usar config local
+try:
+    # Si está en Streamlit Cloud
+    DB_CONFIG = {
+        'host': st.secrets["mysql"]["host"],
+        'port': st.secrets["mysql"]["port"],
+        'database': st.secrets["mysql"]["database"],
+        'user': st.secrets["mysql"]["user"],
+        'password': st.secrets["mysql"]["password"]
+    }
+except (FileNotFoundError, KeyError):
+    # Si está en local
+    DB_CONFIG = {
+        'host': 'localhost',
+        'port': 3306,
+        'database': 'f1_datawarehouse',
+        'user': 'root',
+        'password': ''  # ⚠️ CAMBIA ESTO si tu MySQL tiene password
+    }
+
 
 # Crear connection string para SQLAlchemy
 CONNECTION_STRING = f"mysql+mysqlconnector://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
