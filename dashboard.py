@@ -363,6 +363,36 @@ def get_lista_constructores():
     """
     return ejecutar_query(query)
 
+def get_lista_constructores_activos_recientes():
+    """Obtener constructores que participaron en los últimos 4 años consecutivos (2021-2024)
+    Para análisis de tiempos de vuelta donde los datos están disponibles desde 2004
+    """
+    query = """
+        WITH constructores_por_anio AS (
+            SELECT DISTINCT 
+                c.constructor_id,
+                c.nombre,
+                t.anio
+            FROM fact_resultado_carrera f
+            JOIN dim_constructor c ON f.constructor_id = c.constructor_id
+            JOIN dim_tiempo t ON f.tiempo_id = t.tiempo_id
+            WHERE t.anio >= 2021 AND t.anio <= 2024
+        ),
+        constructores_con_4_anios AS (
+            SELECT 
+                constructor_id,
+                nombre,
+                COUNT(DISTINCT anio) as anios_participados
+            FROM constructores_por_anio
+            GROUP BY constructor_id, nombre
+            HAVING COUNT(DISTINCT anio) = 4
+        )
+        SELECT nombre
+        FROM constructores_con_4_anios
+        ORDER BY nombre
+    """
+    return ejecutar_query(query)
+
 def get_lista_circuitos():
     """Obtener lista de circuitos"""
     query = """
@@ -1057,32 +1087,36 @@ def main():
         st.markdown("**Compara cómo evolucionó la mejor vuelta de un constructor específico versus el promedio de todos los equipos en un circuito**")
         
         # Información sobre disponibilidad de datos
-        st.info("ℹ️ **Nota:** Los datos de tiempo de mejor vuelta están disponibles desde **2004 en adelante** (~95% de cobertura en años recientes)")
+        st.info("ℹ️ **Nota:** Los datos de tiempo de mejor vuelta están disponibles desde **2004 en adelante**. "
+                "Mostrando solo constructores activos en los últimos 4 años consecutivos (2021-2024).")
         
         col1, col2 = st.columns(2)
         
         # Obtener listas para los selectores
-        df_constructores = get_lista_constructores()
+        df_constructores = get_lista_constructores_activos_recientes()
         df_circuitos = get_lista_circuitos()
         
-        with col1:
-            constructor_seleccionado = st.selectbox(
-                "🏎️ Selecciona un Constructor:",
-                df_constructores['nombre'].tolist(),
-                index=0
-            )
-        
-        with col2:
-            circuito_seleccionado = st.selectbox(
-                "🏁 Selecciona un Circuito:",
-                df_circuitos['nombre'].tolist(),
-                index=0
-            )
-        
-        # Botón para ejecutar análisis
-        if st.button("🔍 Analizar Evolución de Tiempos", type="primary"):
-            with st.spinner(f"Analizando {constructor_seleccionado} en {circuito_seleccionado}..."):
-                df_evolucion = get_evolucion_tiempos_constructor_circuito(
+        if df_constructores.empty:
+            st.warning("⚠️ No hay constructores que hayan participado en los últimos 4 años consecutivos.")
+        else:
+            with col1:
+                constructor_seleccionado = st.selectbox(
+                    "🏎️ Selecciona un Constructor Activo:",
+                    df_constructores['nombre'].tolist(),
+                    index=0
+                )
+            
+            with col2:
+                circuito_seleccionado = st.selectbox(
+                    "🏁 Selecciona un Circuito:",
+                    df_circuitos['nombre'].tolist(),
+                    index=0
+                )
+            
+            # Botón para ejecutar análisis
+            if st.button("🔍 Analizar Evolución de Tiempos", type="primary"):
+                with st.spinner(f"Analizando {constructor_seleccionado} en {circuito_seleccionado}..."):
+                    df_evolucion = get_evolucion_tiempos_constructor_circuito(
                     constructor_seleccionado,
                     circuito_seleccionado
                 )
@@ -1236,9 +1270,9 @@ def main():
                     st.info("💡 **Posibles razones:**\n"
                            "- El constructor no compitió en este circuito durante 2004-2024\n"
                            "- Los datos de mejor vuelta solo están disponibles desde 2004\n"
-                           "- Prueba con constructores modernos (Mercedes, Ferrari, Red Bull, McLaren) en circuitos actuales")
-        else:
-            st.info("👆 Selecciona un constructor y un circuito, luego haz clic en 'Analizar Evolución de Tiempos'")
+                           "- Prueba con otros constructores activos en circuitos actuales")
+            else:
+                st.info("👆 Selecciona un constructor y un circuito, luego haz clic en 'Analizar Evolución de Tiempos'")
         
         st.markdown("---")
         
