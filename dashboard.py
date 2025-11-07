@@ -553,6 +553,116 @@ def get_lista_pilotos():
     """
     return ejecutar_query(query)
 
+def get_lista_pilotos_por_anio(anio):
+    """Obtener lista de pilotos que corrieron en un año específico"""
+    query = f"""
+        SELECT DISTINCT p.nombre_completo
+        FROM fact_resultado_carrera f
+        JOIN dim_piloto p ON f.piloto_id = p.piloto_id
+        JOIN dim_tiempo t ON f.tiempo_id = t.tiempo_id
+        WHERE t.anio = {anio}
+        ORDER BY p.nombre_completo
+    """
+    return ejecutar_query(query)
+
+def get_evolucion_campeonato_por_carreras(anio):
+    """Evolución del campeonato carrera por carrera en un año específico
+    Retorna puntos acumulados de cada piloto después de cada carrera
+    """
+    query = f"""
+        WITH carreras_ordenadas AS (
+            SELECT DISTINCT 
+                ca.carrera_id,
+                ca.ronda,
+                ca.nombre_gp,
+                t.fecha
+            FROM dim_carrera ca
+            JOIN dim_tiempo t ON ca.fecha = t.fecha
+            WHERE t.anio = {anio}
+            ORDER BY ca.ronda
+        ),
+        puntos_por_carrera AS (
+            SELECT 
+                ca.ronda,
+                ca.nombre_gp,
+                p.nombre_completo as piloto,
+                c.nombre as constructor,
+                f.puntos,
+                SUM(f.puntos) OVER (
+                    PARTITION BY p.piloto_id 
+                    ORDER BY ca.ronda
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ) as puntos_acumulados
+            FROM fact_resultado_carrera f
+            JOIN dim_piloto p ON f.piloto_id = p.piloto_id
+            JOIN dim_constructor c ON f.constructor_id = c.constructor_id
+            JOIN dim_carrera ca ON f.carrera_id = ca.carrera_id
+            JOIN dim_tiempo t ON f.tiempo_id = t.tiempo_id
+            WHERE t.anio = {anio}
+        )
+        SELECT 
+            ronda,
+            nombre_gp,
+            piloto,
+            constructor,
+            puntos,
+            puntos_acumulados
+        FROM puntos_por_carrera
+        ORDER BY ronda, puntos_acumulados DESC
+    """
+    return ejecutar_query(query)
+
+def get_colores_constructores():
+    """Mapeo de colores por constructor para consistencia visual"""
+    # Colores oficiales aproximados de equipos F1
+    colores = {
+        'Mercedes': '#00D2BE',
+        'Ferrari': '#DC0000',
+        'Red Bull': '#0600EF',
+        'Red Bull Racing': '#0600EF',
+        'McLaren': '#FF8700',
+        'Alpine': '#0090FF',
+        'Aston Martin': '#006F62',
+        'AlphaTauri': '#2B4562',
+        'Alfa Romeo': '#900000',
+        'Haas': '#FFFFFF',
+        'Williams': '#005AFF',
+        'Racing Point': '#F596C8',
+        'Renault': '#FFF500',
+        'Toro Rosso': '#469BFF',
+        'Force India': '#F596C8',
+        'Sauber': '#9B0000',
+        'Manor': '#6D1F1F',
+        'Lotus F1': '#FFB800',
+        'Caterham': '#005030',
+        'Marussia': '#6D1F1F',
+        'HRT': '#5A5A5A',
+        'Virgin': '#C00000',
+        'Brawn': '#FFD800',
+        'BMW Sauber': '#1E5BC6',
+        'Toyota': '#E40000',
+        'Honda': '#F0F0F0',
+        'Super Aguri': '#FF6600',
+        'Spyker': '#FF8000',
+        'Midland': '#FF1E00',
+        'Jordan': '#FFED00',
+        'Minardi': '#000000',
+        'Jaguar': '#004225',
+        'BAR': '#006699',
+        'Prost': '#0057A8',
+        'Arrows': '#FF6633',
+        'Benetton': '#1E3D8F',
+        'Stewart': '#FFFFFF',
+        'Tyrrell': '#0057A8',
+        'Ligier': '#0066CC',
+        'Footwork': '#FF1E00',
+        'Larrousse': '#FF6600',
+        'Simtek': '#7B68EE',
+        'Pacific': '#00A3E0',
+        'Forti': '#C0C0C0'
+    }
+    return colores
+
 def get_comparacion_pilotos_por_anio(anio, piloto):
     """Comparar puntos de un piloto vs todos los demás en un año específico"""
     query = f"""
@@ -617,11 +727,10 @@ def main():
             "🏠 Overview",
             "🏆 Campeonatos y Victorias",
             "🥇 Pole Positions",
-            "🏁 Análisis por Circuito",
-            "🚗 Constructores",
-            "📈 Evolución Temporal",
-            "🎯 Estadísticas Especiales",
-            "🔍 Análisis Personalizado"  # NUEVA PÁGINA
+            "� Análisis de Circuitos",
+            "⏱️ Tiempos de Vuelta",
+            "� Análisis de Constructores",
+            "� Comparación de Pilotos"
         ]
     )
     
@@ -824,158 +933,16 @@ def main():
         st.dataframe(df_poles, use_container_width=True, hide_index=True)
     
     # ========================================================================
-    # PÁGINA: ANÁLISIS POR CIRCUITO
+    # PÁGINA: ANÁLISIS DE CIRCUITOS
     # ========================================================================
     
-    elif pagina == "🏁 Análisis por Circuito":
-        st.header("🏁 Análisis por Circuito")
-        
-        st.subheader("🏆 Piloto con Más Victorias por Circuito (Top 20)")
-        df_circuitos = get_mejor_piloto_por_circuito()
-        
-        fig = px.bar(
-            df_circuitos,
-            x='victorias',
-            y='circuito',
-            orientation='h',
-            color='piloto',
-            labels={'victorias': 'Victorias', 'circuito': 'Circuito', 'piloto': 'Piloto'}
-        )
-        fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=800)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.dataframe(df_circuitos, use_container_width=True, hide_index=True)
-    
-    # ========================================================================
-    # PÁGINA: CONSTRUCTORES
-    # ========================================================================
-    
-    elif pagina == "🚗 Constructores":
-        st.header("🚗 Análisis de Constructores")
-        
-        st.subheader("📊 Mejor Relación Puntos/Carrera (min. 100 carreras)")
-        df_const = get_constructores_performance()
-        
-        fig = px.scatter(
-            df_const,
-            x='carreras_disputadas',
-            y='puntos_por_carrera',
-            size='puntos_totales',
-            color='puntos_por_carrera',
-            hover_name='constructor',
-            color_continuous_scale='Viridis',
-            labels={
-                'carreras_disputadas': 'Carreras Disputadas',
-                'puntos_por_carrera': 'Puntos por Carrera',
-                'puntos_totales': 'Puntos Totales'
-            }
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.dataframe(df_const, use_container_width=True, hide_index=True)
-    
-    # ========================================================================
-    # PÁGINA: EVOLUCIÓN TEMPORAL
-    # ========================================================================
-    
-    elif pagina == "📈 Evolución Temporal":
-        st.header("📈 Evolución Temporal")
-        
-        df_evolucion = get_evolucion_victorias_por_año()
-        
-        st.subheader("🏆 Victorias por Año (1950-2024)")
-        
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df_evolucion['anio'],
-            y=df_evolucion['victorias'],
-            mode='lines+markers',
-            name='Victorias',
-            line=dict(color='#E10600', width=2),
-            marker=dict(size=6)
-        ))
-        
-        fig.update_layout(
-            xaxis_title='Año',
-            yaxis_title='Número de Victorias',
-            hovermode='x unified'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Estadísticas por década
-        st.subheader("📊 Distribución por Década")
-        df_decadas = get_victorias_por_decada()
-        df_decadas_agg = df_decadas.groupby('decada')['victorias'].sum().reset_index()
-        
-        fig = px.pie(
-            df_decadas_agg,
-            values='victorias',
-            names='decada',
-            title='Distribución de Victorias por Década'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # ========================================================================
-    # PÁGINA: ESTADÍSTICAS ESPECIALES
-    # ========================================================================
-    
-    elif pagina == "🎯 Estadísticas Especiales":
-        st.header("🎯 Estadísticas Especiales")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🚀 Victorias desde Fuera del Top 10")
-            df_fuera = get_victorias_fuera_top10()
-            
-            st.metric(
-                "Victorias Fuera Top 10",
-                f"{df_fuera['victorias_fuera_top10'].iloc[0]:,}",
-                delta=f"{df_fuera['porcentaje'].iloc[0]}% del total"
-            )
-            
-            # Gráfico de dona
-            labels = ['Desde Top 10', 'Fuera Top 10']
-            values = [
-                ejecutar_query("SELECT COUNT(*) FROM fact_resultado_carrera WHERE es_victoria = 1 AND posicion_salida <= 10")['COUNT(*)'].iloc[0],
-                df_fuera['victorias_fuera_top10'].iloc[0]
-            ]
-            
-            fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3)])
-            fig.update_traces(marker=dict(colors=['#00D2BE', '#E10600']))
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.subheader("⚡ Conversión Pole → Victoria")
-            df_conv = get_conversion_pole_victoria()
-            
-            st.metric(
-                "Tasa de Conversión",
-                f"{df_conv['porcentaje_conversion'].iloc[0]}%"
-            )
-            
-            # Gráfico de barras
-            labels = ['Poles con Victoria', 'Victorias sin Pole']
-            values = [
-                df_conv['poles_con_victoria'].iloc[0],
-                df_conv['total_victorias'].iloc[0] - df_conv['poles_con_victoria'].iloc[0]
-            ]
-            
-            fig = go.Figure(data=[go.Bar(x=labels, y=values, marker_color=['#4CAF50', '#FF9800'])])
-            st.plotly_chart(fig, use_container_width=True)
-    
-    # ========================================================================
-    # PÁGINA: ANÁLISIS PERSONALIZADO (NUEVA)
-    # ========================================================================
-    
-    elif pagina == "🔍 Análisis Personalizado":
-        st.header("🔍 Análisis Personalizado con Filtros Interactivos")
-        st.markdown("Explora los datos aplicando tus propios filtros y comparaciones")
+    elif pagina == "� Análisis de Circuitos":
+        st.header("🌍 Análisis de Circuitos")
+        st.markdown("Explora la distribución geográfica y comparación de circuitos")
         st.markdown("---")
         
         # ====================================================================
-        # ANÁLISIS 1: CIRCUITOS POR CONTINENTE
+        # SUB-SECCIÓN 1: DISTRIBUCIÓN POR CONTINENTE
         # ====================================================================
         
         st.subheader("🌍 Distribución de Circuitos por Continente")
@@ -1080,7 +1047,101 @@ def main():
         st.markdown("---")
         
         # ====================================================================
-        # ANÁLISIS 2: EVOLUCIÓN DE TIEMPOS POR CONSTRUCTOR Y CIRCUITO
+        # SUB-SECCIÓN 2: COMPARACIÓN ENTRE CIRCUITOS
+        # ====================================================================
+        
+        st.subheader("🏁 Comparación entre Circuitos")
+        st.markdown("**Compara estadísticas entre dos circuitos diferentes**")
+        
+        df_circuitos = get_lista_circuitos()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            circuito1 = st.selectbox(
+                "🏁 Circuito 1:",
+                df_circuitos['nombre'].tolist(),
+                index=0,
+                key='circuito1'
+            )
+        
+        with col2:
+            circuito2 = st.selectbox(
+                "🏁 Circuito 2:",
+                df_circuitos['nombre'].tolist(),
+                index=1 if len(df_circuitos) > 1 else 0,
+                key='circuito2'
+            )
+        
+        if st.button("⚖️ Comparar Circuitos", type="primary", key='btn_comparar_circuitos'):
+            if circuito1 == circuito2:
+                st.error("⚠️ Por favor selecciona dos circuitos diferentes")
+            else:
+                with st.spinner("Comparando circuitos..."):
+                    df_comparacion = get_comparacion_circuitos(circuito1, circuito2)
+                    
+                    if len(df_comparacion) > 0:
+                        # Mostrar comparación lado a lado
+                        col1, col2 = st.columns(2)
+                        
+                        for idx, row in df_comparacion.iterrows():
+                            col = col1 if idx == 0 else col2
+                            
+                            with col:
+                                st.markdown(f"### {row['circuito']}")
+                                st.metric("Carreras Disputadas", f"{row['carreras_disputadas']:.0f}")
+                                st.metric("Pilotos Diferentes", f"{row['pilotos_diferentes']:.0f}")
+                                st.metric("Constructores", f"{row['constructores_diferentes']:.0f}")
+                                st.metric("Velocidad Promedio", f"{row['velocidad_promedio']:.2f} km/h" if pd.notna(row['velocidad_promedio']) else "N/A")
+                                st.metric("Primera Carrera", f"{row['primera_carrera']:.0f}")
+                                st.metric("Última Carrera", f"{row['ultima_carrera']:.0f}")
+                        
+                        # Gráfico de comparación
+                        st.markdown("---")
+                        fig = px.bar(
+                            df_comparacion,
+                            x='circuito',
+                            y=['carreras_disputadas', 'pilotos_diferentes', 'constructores_diferentes'],
+                            barmode='group',
+                            title='Comparación de Estadísticas',
+                            labels={'value': 'Cantidad', 'variable': 'Métrica'}
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # ====================================================================
+        # SUB-SECCIÓN 3: PILOTOS CON MÁS VICTORIAS POR CIRCUITO
+        # ====================================================================
+        
+        st.subheader("🏆 Piloto con Más Victorias por Circuito (Top 20)")
+        df_circuitos_victorias = get_mejor_piloto_por_circuito()
+        
+        fig = px.bar(
+            df_circuitos_victorias,
+            x='victorias',
+            y='circuito',
+            orientation='h',
+            color='piloto',
+            labels={'victorias': 'Victorias', 'circuito': 'Circuito', 'piloto': 'Piloto'}
+        )
+        fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=800)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        with st.expander("🔍 Ver tabla detallada"):
+            st.dataframe(df_circuitos_victorias, use_container_width=True, hide_index=True)
+    
+    # ========================================================================
+    # PÁGINA: TIEMPOS DE VUELTA
+    # ========================================================================
+    
+    elif pagina == "⏱️ Tiempos de Vuelta":
+        st.header("⏱️ Análisis de Tiempos de Vuelta")
+        st.markdown("Compara la evolución de tiempos de vuelta por constructor y circuito")
+        st.markdown("---")
+        
+        # ====================================================================
+        # EVOLUCIÓN DE TIEMPOS POR CONSTRUCTOR Y CIRCUITO
         # ====================================================================
         
         st.subheader("⏱️ Evolución de Mejor Vuelta: Constructor vs Promedio General")
@@ -1273,77 +1334,52 @@ def main():
                            "- Prueba con otros constructores activos en circuitos actuales")
             else:
                 st.info("👆 Selecciona un constructor y un circuito, luego haz clic en 'Analizar Evolución de Tiempos'")
+    
+    # ========================================================================
+    # PÁGINA: ANÁLISIS DE CONSTRUCTORES
+    # ========================================================================
+    
+    elif pagina == "🚗 Análisis de Constructores":
+        st.header("🚗 Análisis de Constructores")
+        st.markdown("Explora el rendimiento y evolución de los constructores")
+        st.markdown("---")
+        
+        # ====================================================================
+        # SUB-SECCIÓN 1: RELACIÓN PUNTOS/CARRERA
+        # ====================================================================
+        
+        st.subheader("📊 Mejor Relación Puntos/Carrera (min. 100 carreras)")
+        df_const = get_constructores_performance()
+        
+        fig = px.scatter(
+            df_const,
+            x='carreras_disputadas',
+            y='puntos_por_carrera',
+            size='puntos_totales',
+            color='puntos_por_carrera',
+            hover_name='constructor',
+            color_continuous_scale='Viridis',
+            labels={
+                'carreras_disputadas': 'Carreras Disputadas',
+                'puntos_por_carrera': 'Puntos por Carrera',
+                'puntos_totales': 'Puntos Totales'
+            }
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        with st.expander("🔍 Ver tabla detallada"):
+            st.dataframe(df_const, use_container_width=True, hide_index=True)
         
         st.markdown("---")
         
         # ====================================================================
-        # ANÁLISIS 3: COMPARACIÓN ENTRE CIRCUITOS
+        # SUB-SECCIÓN 2: VICTORIAS POR CONSTRUCTOR CON FILTROS
         # ====================================================================
         
-        st.subheader("🏁 Comparación entre Circuitos")
-        st.markdown("**Compara estadísticas entre dos circuitos diferentes**")
+        st.subheader("🏆 Victorias Filtradas por Constructor y Década")
+        st.markdown("**Analiza victorias aplicando filtros personalizados**")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            circuito1 = st.selectbox(
-                "🏁 Circuito 1:",
-                df_circuitos['nombre'].tolist(),
-                index=0,
-                key='circuito1'
-            )
-        
-        with col2:
-            circuito2 = st.selectbox(
-                "🏁 Circuito 2:",
-                df_circuitos['nombre'].tolist(),
-                index=1 if len(df_circuitos) > 1 else 0,
-                key='circuito2'
-            )
-        
-        if st.button("⚖️ Comparar Circuitos", type="primary"):
-            if circuito1 == circuito2:
-                st.error("⚠️ Por favor selecciona dos circuitos diferentes")
-            else:
-                with st.spinner("Comparando circuitos..."):
-                    df_comparacion = get_comparacion_circuitos(circuito1, circuito2)
-                    
-                    if len(df_comparacion) > 0:
-                        # Mostrar comparación lado a lado
-                        col1, col2 = st.columns(2)
-                        
-                        for idx, row in df_comparacion.iterrows():
-                            col = col1 if idx == 0 else col2
-                            
-                            with col:
-                                st.markdown(f"### {row['circuito']}")
-                                st.metric("Carreras Disputadas", f"{row['carreras_disputadas']:.0f}")
-                                st.metric("Pilotos Diferentes", f"{row['pilotos_diferentes']:.0f}")
-                                st.metric("Constructores", f"{row['constructores_diferentes']:.0f}")
-                                st.metric("Velocidad Promedio", f"{row['velocidad_promedio']:.2f} km/h" if pd.notna(row['velocidad_promedio']) else "N/A")
-                                st.metric("Primera Carrera", f"{row['primera_carrera']:.0f}")
-                                st.metric("Última Carrera", f"{row['ultima_carrera']:.0f}")
-                        
-                        # Gráfico de comparación
-                        st.markdown("---")
-                        fig = px.bar(
-                            df_comparacion,
-                            x='circuito',
-                            y=['carreras_disputadas', 'pilotos_diferentes', 'constructores_diferentes'],
-                            barmode='group',
-                            title='Comparación de Estadísticas',
-                            labels={'value': 'Cantidad', 'variable': 'Métrica'}
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("---")
-        
-        # ====================================================================
-        # ANÁLISIS 4: VICTORIAS POR CONSTRUCTOR CON FILTROS
-        # ====================================================================
-        
-        st.subheader("🏆 Victorias Filtradas")
-        st.markdown("**Analiza victorias aplicando filtros de constructor y década**")
+        df_constructores = get_lista_constructores()
         
         col1, col2, col3 = st.columns(3)
         
@@ -1390,7 +1426,7 @@ def main():
                     fig.update_traces(line_color='#E10600')
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    with st.expander("Ver pilotos por año"):
+                    with st.expander("Ver detalle por año"):
                         st.dataframe(df_victorias_filtradas, use_container_width=True, hide_index=True)
                 else:
                     st.warning("⚠️ No se encontraron victorias con los filtros seleccionados")
@@ -1398,43 +1434,13 @@ def main():
         st.markdown("---")
         
         # ====================================================================
-        # ANÁLISIS 5: NACIONALIDADES
+        # SUB-SECCIÓN 3: EVOLUCIÓN DE PUNTOS POR CONSTRUCTOR
         # ====================================================================
         
-        st.subheader("🌎 Pilotos por Nacionalidad")
-        
-        df_nacionalidades = get_pilotos_por_nacionalidad()
+        st.subheader("📈 Evolución de Puntos por Constructor (Temporada a Temporada)")
+        st.markdown("**Analiza cómo evolucionaron los puntos de un constructor a lo largo de su historia**")
         
         col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            fig = px.bar(
-                df_nacionalidades,
-                x='nacionalidad',
-                y='cantidad_pilotos',
-                color='cantidad_pilotos',
-                color_continuous_scale='Reds',
-                labels={'nacionalidad': 'Nacionalidad', 'cantidad_pilotos': 'Cantidad de Pilotos'},
-                title='Top 15 Nacionalidades con Más Pilotos'
-            )
-            fig.update_xaxes(tickangle=45)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            st.metric("Total Nacionalidades", len(ejecutar_query("SELECT DISTINCT nacionalidad FROM dim_piloto")))
-            st.metric("Top Nacionalidad", df_nacionalidades.iloc[0]['nacionalidad'])
-            st.metric("Cantidad", f"{df_nacionalidades.iloc[0]['cantidad_pilotos']:.0f}")
-        
-        st.markdown("---")
-        
-        # ====================================================================
-        # ANÁLISIS 6: EVOLUCIÓN DE PUNTOS POR CONSTRUCTOR
-        # ====================================================================
-        
-        st.subheader("📊 Evolución de Puntos por Constructor")
-        st.markdown("**Analiza la evolución histórica de puntos de un constructor año a año**")
-        
-        col1, col2 = st.columns([2, 1])
         
         with col1:
             constructor_puntos = st.selectbox(
@@ -1550,171 +1556,282 @@ def main():
                         )
                 else:
                     st.warning(f"⚠️ No hay datos disponibles para {constructor_puntos}")
-        
+    
+    # ========================================================================
+    # PÁGINA: COMPARACIÓN DE PILOTOS
+    # ========================================================================
+    
+    elif pagina == "🏁 Comparación de Pilotos":
+        st.header("🏁 Comparación de Pilotos")
+        st.markdown("Analiza el rendimiento de pilotos y la evolución del campeonato carrera por carrera")
         st.markdown("---")
         
         # ====================================================================
-        # ANÁLISIS 7: COMPARACIÓN DE PILOTOS EN UN AÑO ESPECÍFICO
+        # COMPARACIÓN DE PILOTOS POR TEMPORADA
         # ====================================================================
         
-        st.subheader("🏁 Comparación de Pilotos en una Temporada")
-        st.markdown("**Compara el rendimiento de un piloto vs todos los demás en un año específico**")
+        st.subheader("🏁 Análisis de Pilotos por Temporada")
+        st.markdown("**Analiza el rendimiento de pilotos y la evolución del campeonato carrera por carrera**")
         
-        # Obtener listas
+        # Selector de año
         df_anios = get_lista_anios()
-        df_pilotos_lista = get_lista_pilotos()
         
-        col1, col2, col3 = st.columns([1, 2, 1])
+        anio_seleccionado = st.selectbox(
+            "📅 Selecciona una Temporada:",
+            df_anios['anio'].tolist(),
+            index=0,
+            key='anio_comparacion_temporada'
+        )
         
-        with col1:
-            anio_seleccionado = st.selectbox(
-                "📅 Selecciona un Año:",
-                df_anios['anio'].tolist(),
-                index=0,
-                key='anio_comparacion'
-            )
+        # Obtener pilotos que corrieron ese año
+        df_pilotos_anio = get_lista_pilotos_por_anio(anio_seleccionado)
         
-        with col2:
-            piloto_seleccionado = st.selectbox(
-                "🏎️ Selecciona un Piloto:",
-                df_pilotos_lista['nombre_completo'].tolist(),
-                index=0,
-                key='piloto_comparacion'
-            )
-        
-        with col3:
-            st.markdown("")
-            st.markdown("")
-            comparar_pilotos = st.button("⚖️ Comparar Pilotos", type="primary", key='btn_comparar_pilotos')
-        
-        if comparar_pilotos:
-            with st.spinner(f"Analizando temporada {anio_seleccionado}..."):
-                df_comparacion_pilotos = get_comparacion_pilotos_por_anio(anio_seleccionado, piloto_seleccionado)
-                df_evolucion_carreras = get_evolucion_piloto_por_carreras_anio(anio_seleccionado, piloto_seleccionado)
+        if df_pilotos_anio.empty:
+            st.warning(f"⚠️ No hay datos de pilotos para el año {anio_seleccionado}")
+        else:
+            # Tabs para diferentes análisis
+            tab1, tab2 = st.tabs(["🏆 Evolución del Campeonato", "⚖️ Comparación Individual"])
+            
+            # ================================================================
+            # TAB 1: EVOLUCIÓN DEL CAMPEONATO CARRERA POR CARRERA
+            # ================================================================
+            with tab1:
+                st.markdown(f"### 📊 Evolución del Campeonato {anio_seleccionado} - Carrera por Carrera")
+                st.markdown("Puntos acumulados de cada piloto a lo largo de la temporada, con colores por escudería")
                 
-                if len(df_comparacion_pilotos) > 0:
-                    # Encontrar posición del piloto seleccionado
-                    piloto_row = df_comparacion_pilotos[df_comparacion_pilotos['es_piloto_seleccionado'] == 1]
+                with st.spinner("Calculando evolución del campeonato..."):
+                    df_evolucion_campeonato = get_evolucion_campeonato_por_carreras(anio_seleccionado)
                     
-                    if len(piloto_row) > 0:
-                        posicion = piloto_row.index[0] + 1
-                        
-                        st.success(f"✅ {piloto_seleccionado} terminó en la posición **#{posicion}** del campeonato {anio_seleccionado}")
-                        
-                        # Métricas del piloto seleccionado
-                        col1, col2, col3, col4, col5 = st.columns(5)
-                        
-                        with col1:
-                            st.metric("Posición Final", f"#{posicion}")
-                        
-                        with col2:
-                            st.metric("Puntos Totales", f"{piloto_row['puntos_totales'].iloc[0]:.0f}")
-                        
-                        with col3:
-                            st.metric("Victorias", f"{piloto_row['victorias'].iloc[0]:.0f}")
-                        
-                        with col4:
-                            st.metric("Podios", f"{piloto_row['podios'].iloc[0]:.0f}")
-                        
-                        with col5:
-                            st.metric("Poles", f"{piloto_row['poles'].iloc[0]:.0f}")
-                        
-                        st.markdown("---")
-                        
-                        # Gráfico de comparación de puntos (Top 15)
-                        st.markdown(f"#### 📊 Comparación de Puntos - Temporada {anio_seleccionado} (Top 15)")
-                        
-                        df_top15 = df_comparacion_pilotos.head(15)
-                        
-                        # Colorear diferente al piloto seleccionado
-                        colors = ['#E10600' if row['es_piloto_seleccionado'] == 1 else '#00D2BE' 
-                                 for _, row in df_top15.iterrows()]
-                        
-                        fig = go.Figure(data=[
-                            go.Bar(
-                                x=df_top15['piloto'],
-                                y=df_top15['puntos_totales'],
-                                marker_color=colors,
-                                text=df_top15['puntos_totales'],
-                                textposition='outside'
-                            )
-                        ])
-                        
-                        fig.update_layout(
-                            xaxis_title="Piloto",
-                            yaxis_title="Puntos Totales",
-                            height=500,
-                            showlegend=False
+                    if not df_evolucion_campeonato.empty:
+                        # Obtener top pilotos para el gráfico (evitar saturación)
+                        num_pilotos_mostrar = st.slider(
+                            "Número de pilotos a mostrar:",
+                            min_value=5,
+                            max_value=20,
+                            value=10,
+                            step=1,
+                            key='slider_pilotos_evolucion'
                         )
-                        fig.update_xaxes(tickangle=45)
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        # Identificar top pilotos por puntos finales
+                        puntos_finales = df_evolucion_campeonato.groupby('piloto')['puntos_acumulados'].max()
+                        top_pilotos = puntos_finales.nlargest(num_pilotos_mostrar).index.tolist()
                         
-                        # Evolución carrera por carrera
-                        if len(df_evolucion_carreras) > 0:
-                            st.markdown(f"#### 🏁 Evolución Carrera por Carrera - {piloto_seleccionado}")
+                        # Filtrar datos
+                        df_top = df_evolucion_campeonato[df_evolucion_campeonato['piloto'].isin(top_pilotos)]
+                        
+                        # Crear gráfico de evolución
+                        fig = go.Figure()
+                        
+                        # Obtener colores por constructor
+                        colores_constructores = get_colores_constructores()
+                        
+                        # Agregar línea por cada piloto
+                        for piloto in top_pilotos:
+                            df_piloto = df_top[df_top['piloto'] == piloto]
+                            constructor = df_piloto['constructor'].iloc[0]
+                            color = colores_constructores.get(constructor, '#808080')
                             
-                            # Calcular puntos acumulados
-                            df_evolucion_carreras['puntos_acumulados'] = df_evolucion_carreras['puntos'].cumsum()
-                            
-                            fig2 = go.Figure()
-                            
-                            # Línea de puntos acumulados
-                            fig2.add_trace(go.Scatter(
-                                x=df_evolucion_carreras['ronda'],
-                                y=df_evolucion_carreras['puntos_acumulados'],
+                            fig.add_trace(go.Scatter(
+                                x=df_piloto['ronda'],
+                                y=df_piloto['puntos_acumulados'],
                                 mode='lines+markers',
-                                name='Puntos Acumulados',
-                                line=dict(color='#E10600', width=3),
-                                marker=dict(size=10),
-                                hovertemplate='<b>Carrera %{x}</b><br>' +
+                                name=f"{piloto} ({constructor})",
+                                line=dict(color=color, width=2.5),
+                                marker=dict(size=6, color=color),
+                                hovertemplate=f'<b>{piloto}</b><br>' +
+                                            'Carrera: %{x}<br>' +
                                             'Puntos Acumulados: %{y}<br>' +
                                             '<extra></extra>'
                             ))
-                            
-                            # Barras de puntos por carrera
-                            fig2.add_trace(go.Bar(
-                                x=df_evolucion_carreras['ronda'],
-                                y=df_evolucion_carreras['puntos'],
-                                name='Puntos por Carrera',
-                                marker_color='rgba(0, 210, 190, 0.5)',
-                                yaxis='y2'
-                            ))
-                            
-                            fig2.update_layout(
-                                title=f"Puntos por Carrera y Acumulados - {piloto_seleccionado} ({anio_seleccionado})",
-                                xaxis_title="Ronda",
-                                yaxis_title="Puntos Acumulados",
-                                yaxis2=dict(
-                                    title="Puntos por Carrera",
-                                    overlaying='y',
-                                    side='right'
-                                ),
-                                hovermode='x unified',
-                                height=500
-                            )
-                            
-                            st.plotly_chart(fig2, use_container_width=True)
-                            
-                            # Tabla detallada de carreras
-                            with st.expander("Ver detalle de cada Gran Premio"):
-                                st.dataframe(
-                                    df_evolucion_carreras[['ronda', 'nombre_gp', 'circuito', 'posicion_final', 'posicion_salida', 'puntos', 'puntos_acumulados']],
-                                    use_container_width=True,
-                                    hide_index=True
-                                )
                         
-                        # Tabla completa de clasificación
-                        with st.expander("Ver clasificación completa del campeonato"):
-                            st.dataframe(
-                                df_comparacion_pilotos[['piloto', 'constructor', 'puntos_totales', 'victorias', 'podios', 'poles', 'carreras_disputadas']],
-                                use_container_width=True,
-                                hide_index=True
-                            )
+                        fig.update_layout(
+                            title=f"Evolución del Campeonato de Pilotos {anio_seleccionado}",
+                            xaxis_title="Ronda (Carrera)",
+                            yaxis_title="Puntos Acumulados",
+                            hovermode='x unified',
+                            height=600,
+                            legend=dict(
+                                orientation="v",
+                                yanchor="top",
+                                y=0.99,
+                                xanchor="left",
+                                x=1.01
+                            ),
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            xaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                            yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.2)')
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Tabla de clasificación final
+                        st.markdown("#### 🏆 Clasificación Final del Campeonato")
+                        clasificacion_final = df_evolucion_campeonato.groupby(['piloto', 'constructor']).agg({
+                            'puntos_acumulados': 'max',
+                            'puntos': 'sum'
+                        }).reset_index()
+                        clasificacion_final = clasificacion_final.sort_values('puntos_acumulados', ascending=False)
+                        clasificacion_final.insert(0, 'Posición', range(1, len(clasificacion_final) + 1))
+                        clasificacion_final.columns = ['Posición', 'Piloto', 'Constructor', 'Puntos Totales', 'Verificación']
+                        
+                        st.dataframe(
+                            clasificacion_final[['Posición', 'Piloto', 'Constructor', 'Puntos Totales']],
+                            use_container_width=True,
+                            hide_index=True
+                        )
                     else:
-                        st.warning(f"⚠️ {piloto_seleccionado} no participó en la temporada {anio_seleccionado}")
-                else:
-                    st.warning(f"⚠️ No hay datos disponibles para la temporada {anio_seleccionado}")
+                        st.warning(f"⚠️ No hay datos de evolución para el año {anio_seleccionado}")
+            
+            # ================================================================
+            # TAB 2: COMPARACIÓN INDIVIDUAL DE PILOTO
+            # ================================================================
+            with tab2:
+                st.markdown(f"### ⚖️ Comparación Individual de Piloto en {anio_seleccionado}")
+                
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    piloto_seleccionado = st.selectbox(
+                        "🏎️ Selecciona un Piloto:",
+                        df_pilotos_anio['nombre_completo'].tolist(),
+                        index=0,
+                        key='piloto_comparacion_individual'
+                    )
+                
+                with col2:
+                    st.markdown("")
+                    st.markdown("")
+                    comparar_pilotos = st.button("⚖️ Comparar", type="primary", key='btn_comparar_pilotos')
+                
+                if comparar_pilotos:
+                    with st.spinner(f"Analizando temporada {anio_seleccionado}..."):
+                        df_comparacion_pilotos = get_comparacion_pilotos_por_anio(anio_seleccionado, piloto_seleccionado)
+                        df_evolucion_carreras = get_evolucion_piloto_por_carreras_anio(anio_seleccionado, piloto_seleccionado)
+                        
+                        if len(df_comparacion_pilotos) > 0:
+                            # Encontrar posición del piloto seleccionado
+                            piloto_row = df_comparacion_pilotos[df_comparacion_pilotos['es_piloto_seleccionado'] == 1]
+                            
+                            if len(piloto_row) > 0:
+                                posicion = piloto_row.index[0] + 1
+                                
+                                st.success(f"✅ {piloto_seleccionado} terminó en la posición **#{posicion}** del campeonato {anio_seleccionado}")
+                                
+                                # Métricas del piloto seleccionado
+                                col1, col2, col3, col4, col5 = st.columns(5)
+                                
+                                with col1:
+                                    st.metric("Posición Final", f"#{posicion}")
+                                
+                                with col2:
+                                    st.metric("Puntos Totales", f"{piloto_row['puntos_totales'].iloc[0]:.0f}")
+                                
+                                with col3:
+                                    st.metric("Victorias", f"{piloto_row['victorias'].iloc[0]:.0f}")
+                                
+                                with col4:
+                                    st.metric("Podios", f"{piloto_row['podios'].iloc[0]:.0f}")
+                                
+                                with col5:
+                                    st.metric("Poles", f"{piloto_row['poles'].iloc[0]:.0f}")
+                                
+                                st.markdown("---")
+                                
+                                # Gráfico de comparación de puntos (Top 15)
+                                st.markdown(f"#### 📊 Comparación de Puntos - Temporada {anio_seleccionado} (Top 15)")
+                                
+                                df_top15 = df_comparacion_pilotos.head(15)
+                                
+                                # Colorear diferente al piloto seleccionado
+                                colors = ['#E10600' if row['es_piloto_seleccionado'] == 1 else '#00D2BE' 
+                                         for _, row in df_top15.iterrows()]
+                                
+                                fig = go.Figure(data=[
+                                    go.Bar(
+                                        x=df_top15['piloto'],
+                                        y=df_top15['puntos_totales'],
+                                        marker_color=colors,
+                                        text=df_top15['puntos_totales'],
+                                        textposition='outside'
+                                    )
+                                ])
+                                
+                                fig.update_layout(
+                                    xaxis_title="Piloto",
+                                    yaxis_title="Puntos Totales",
+                                    height=500,
+                                    showlegend=False
+                                )
+                                fig.update_xaxes(tickangle=45)
+                                
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                                # Evolución carrera por carrera
+                                if len(df_evolucion_carreras) > 0:
+                                    st.markdown(f"#### 🏁 Evolución Carrera por Carrera - {piloto_seleccionado}")
+                                    
+                                    # Calcular puntos acumulados
+                                    df_evolucion_carreras['puntos_acumulados'] = df_evolucion_carreras['puntos'].cumsum()
+                                    
+                                    fig2 = go.Figure()
+                                    
+                                    # Línea de puntos acumulados
+                                    fig2.add_trace(go.Scatter(
+                                        x=df_evolucion_carreras['ronda'],
+                                        y=df_evolucion_carreras['puntos_acumulados'],
+                                        mode='lines+markers',
+                                        name='Puntos Acumulados',
+                                        line=dict(color='#E10600', width=3),
+                                        marker=dict(size=10),
+                                        hovertemplate='<b>Carrera %{x}</b><br>' +
+                                                    'Puntos Acumulados: %{y}<br>' +
+                                                    '<extra></extra>'
+                                    ))
+                                    
+                                    # Barras de puntos por carrera
+                                    fig2.add_trace(go.Bar(
+                                        x=df_evolucion_carreras['ronda'],
+                                        y=df_evolucion_carreras['puntos'],
+                                        name='Puntos por Carrera',
+                                        marker_color='rgba(0, 210, 190, 0.5)',
+                                        yaxis='y2'
+                                    ))
+                                    
+                                    fig2.update_layout(
+                                        title=f"Puntos por Carrera y Acumulados - {piloto_seleccionado} ({anio_seleccionado})",
+                                        xaxis_title="Ronda",
+                                        yaxis_title="Puntos Acumulados",
+                                        yaxis2=dict(
+                                            title="Puntos por Carrera",
+                                            overlaying='y',
+                                            side='right'
+                                        ),
+                                        hovermode='x unified',
+                                        height=500
+                                    )
+                                    
+                                    st.plotly_chart(fig2, use_container_width=True)
+                                    
+                                    # Tabla detallada de carreras
+                                    with st.expander("Ver detalle de cada Gran Premio"):
+                                        st.dataframe(
+                                            df_evolucion_carreras[['ronda', 'nombre_gp', 'circuito', 'posicion_final', 'posicion_salida', 'puntos', 'puntos_acumulados']],
+                                            use_container_width=True,
+                                            hide_index=True
+                                        )
+                                
+                                # Tabla completa de clasificación
+                                with st.expander("Ver clasificación completa del campeonato"):
+                                    st.dataframe(
+                                        df_comparacion_pilotos[['piloto', 'constructor', 'puntos_totales', 'victorias', 'podios', 'poles', 'carreras_disputadas']],
+                                        use_container_width=True,
+                                        hide_index=True
+                                    )
+                            else:
+                                st.warning(f"⚠️ {piloto_seleccionado} no participó en la temporada {anio_seleccionado}")
+                        else:
+                            st.warning(f"⚠️ No hay datos disponibles para la temporada {anio_seleccionado}")
 
 # ============================================================================
 # EJECUTAR APP
