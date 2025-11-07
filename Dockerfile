@@ -20,17 +20,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto de la aplicación
 COPY . .
 
-# Exponer el puerto de Streamlit
+# Exponer el puerto de Streamlit (Railway usará la variable PORT)
 EXPOSE 8501
 
-# Configurar Streamlit para que funcione en contenedor
-ENV STREAMLIT_SERVER_PORT=8501
+# Configurar Streamlit
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 ENV STREAMLIT_SERVER_HEADLESS=true
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
-# Healthcheck para verificar que la app está corriendo
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
-
 # Comando para ejecutar la aplicación
-CMD ["streamlit", "run", "dashboard.py"]
+# Railway proveerá la variable PORT, pero usamos 8501 por defecto
+CMD streamlit run dashboard.py --server.port=${PORT:-8501} --server.address=0.0.0.0
